@@ -1,0 +1,10 @@
+{
+  "name": "Angola — Sombras da Guerra",
+  "short_name": "Sombras da Guerra",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#101812",
+  "theme_color": "#18231d",
+  "orientation": "landscape",
+  "description": "Protótipo móvel de ação e exploração inspirado na história de Angola."
+}

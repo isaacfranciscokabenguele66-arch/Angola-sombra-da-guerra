@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#18231d">
+<meta name="description" content="Protótipo móvel de ação e exploração inspirado na história de Angola.">
+<link rel="manifest" href="manifest.json">
+<title>Angola — Sombras da Guerra</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111;font-family:system-ui,Arial;color:#fff;touch-action:none}
+#game{display:block;width:100vw;height:100dvh;background:#1a211b}
+#hud{position:fixed;inset:0;pointer-events:none;text-shadow:0 2px 3px #000}
+.panel{background:#101812cc;border:1px solid #a9b69a66;border-radius:10px;padding:8px 11px}
+#top{position:absolute;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;gap:8px;align-items:flex-start;font-size:13px}
+#mission{max-width:58%;line-height:1.35}
+#stats{white-space:nowrap;text-align:right;line-height:1.5}
+#message{position:absolute;top:23%;left:50%;transform:translateX(-50%);font-weight:700;text-align:center;font-size:17px;width:90%;color:#f4e8b8}
+#cross{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:25px;color:#fff9}
+#bottom{position:absolute;bottom:12px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:end}
+#stick{width:116px;height:116px;border:2px solid #ffffff66;border-radius:50%;background:#ffffff18;pointer-events:auto;position:relative;touch-action:none}
+#nub{position:absolute;width:45px;height:45px;border-radius:50%;background:#e8e2c9aa;border:2px solid #fff;left:34px;top:34px}
+.actions{display:flex;gap:10px;pointer-events:auto;align-items:end}
+.action{width:66px;height:66px;border-radius:50%;border:2px solid #ffffff99;background:#18251dcc;color:white;font-weight:800;font-size:12px;touch-action:none}
+#fire{width:78px;height:78px;background:#873b2ddd}
+#hint{position:absolute;bottom:137px;left:50%;transform:translateX(-50%);font-size:11px;color:#eee;background:#0008;padding:5px 9px;border-radius:8px;white-space:nowrap}
+#start{position:fixed;inset:0;background:linear-gradient(#101812dd,#101812f2),radial-gradient(circle at center,#59684a,#111);display:flex;align-items:center;justify-content:center;padding:22px;text-align:center}
+#start .card{max-width:460px;background:#101812ed;border:1px solid #a9b69a66;border-radius:18px;padding:24px}
+h1{font-size:27px;line-height:1.05;margin:0 0 10px;color:#e8d9a6}
+.sub{color:#c5cbbd;font-size:13px;line-height:1.5}
+#play{margin-top:18px;border:0;border-radius:10px;background:#b58b42;color:#15150f;font-weight:900;padding:14px 25px;font-size:16px}
+#end{display:none;position:fixed;inset:0;background:#08100de8;align-items:center;justify-content:center;text-align:center;padding:24px}
+#end .card{max-width:420px;background:#142019;border:1px solid #a9b69a66;border-radius:16px;padding:22px}
+@media(min-width:800px){#hint:after{content:" No computador: WASD para mover, setas ou rato para olhar, espaço para disparar."}}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="hud">
+ <div id="top">
+  <div id="mission" class="panel"><b>MISSÃO 01 — O POSTO ABANDONADO</b><br><span id="objective">Encontra o rádio e alcança a saída.</span></div>
+  <div id="stats" class="panel">VIDA <span id="life">100</span>%<br>MUNIÇÃO <span id="ammo">12</span>/12</div>
+ </div>
+ <div id="message"></div><div id="cross">+</div>
+ <div id="hint">Move-te no comando esquerdo · olha arrastando o lado direito</div>
+ <div id="bottom">
+  <div id="stick"><div id="nub"></div></div>
+  <div class="actions">
+   <button class="action" id="reload">RECARREGAR</button>
+   <button class="action" id="fire">DISPARAR</button>
+  </div>
+ </div>
+</div>
+<div id="start"><div class="card">
+ <div style="font-size:12px;letter-spacing:3px;color:#c8b77c">UM JOGO DE AVENTURA E SOBREVIVÊNCIA</div>
+ <h1>ANGOLA<br>SOMBRAS DA GUERRA</h1>
+ <p class="sub">Protótipo jogável inspirado no cenário histórico de Angola. Personagens e missão são fictícios; o jogo não pretende reconstruir acontecimentos reais.</p>
+ <p class="sub"><b>Objetivo:</b> explora o posto abandonado, encontra o rádio e chega à saída. Evita os combatentes hostis.</p>
+ <button id="play">COMEÇAR MISSÃO</button>
+ <p class="sub" style="margin-bottom:0">Controlos: joystick esquerdo para andar; arrasta o lado direito para virar; DISPARAR e RECARREGAR.</p>
+ </div></div>
+<div id="end"><div class="card"><h1 id="endTitle">MISSÃO CONCLUÍDA</h1><p id="endText">Conseguiste sair do posto.</p><button id="again" style="border:0;border-radius:10px;background:#b58b42;color:#15150f;font-weight:900;padding:13px 22px">JOGAR NOVAMENTE</button></div></div>
+<script>
+(()=> {
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+let W,H,zbuf=[],running=false,player,ammo=12,life=100,hasRadio=false,won=false,shotFlash=0,notice='',noticeTime=0,last=0;
+const map=[
+"1111111111111111",
+"1000000000000001",
+"1000001000000001",
+"1000001000000001",
+"1000000000000001",
+"1011100011100001",
+"1000000000000001",
+"1000000000000001",
+"1000110000000001",
+"1000110000000001",
+"1000000000000001",
+"1000000000000001",
+"1000000000000001",
+"1000000000000001",
+"1111111111111111",
+"1111111111111111"
+];
+const enemies=[{x:8.5,y:3.5,hp:2,alive:true},{x:11.5,y:7.5,hp:2,alive:true},{x:5.5,y:11.5,hp:2,alive:true}];
+const radio={x:2.5,y:12.5},exit={x:13.5,y:2.5};
+function resize(){W=canvas.width=Math.floor(innerWidth*devicePixelRatio);H=canvas.height=Math.floor(innerHeight*devicePixelRatio)}
+addEventListener('resize',resize);resize();
+function reset(){player={x:2.5,y:2.5,a:0.12};ammo=12;life=100;hasRadio=false;won=false;enemies.forEach((e,i)=>{e.alive=true;e.hp=2;e.x=[8.5,11.5,5.5][i];e.y=[3.5,7.5,11.5][i]});updateHUD();notice='Localiza o rádio. Mantém-te atento.';noticeTime=3}
+function wall(x,y){let mx=Math.floor(x),my=Math.floor(y);return !map[my]||map[my][mx]!=='0'}
+function updateHUD(){document.getElementById('life').textContent=life;document.getElementById('ammo').textContent=ammo;document.getElementById('objective').textContent=hasRadio?'Rádio encontrado! Alcança a saída marcada.':'Encontra o rádio e alcança a saída.'}
+function say(s,t=2){notice=s;noticeTime=t}
+function move(dx,dy){let nx=player.x+dx,ny=player.y+dy;if(!wall(nx,player.y))player.x=nx;if(!wall(player.x,ny))player.y=ny}
+function shoot(){if(!running)return;if(ammo<=0){say('Sem munição. Recarrega!',1.5);return}ammo--;shotFlash=.12;let target=null,best=99;
+for(const e of enemies){if(!e.alive)continue;let dx=e.x-player.x,dy=e.y-player.y,d=Math.hypot(dx,dy),ang=Math.atan2(dy,dx)-player.a;while(ang>Math.PI)ang-=Math.PI*2;while(ang< -Math.PI)ang+=Math.PI*2;if(Math.abs(ang)<.12&&d<best&&!rayBlocked(d,ang)){best=d;target=e}}
+if(target){target.hp--;if(target.hp<=0){target.alive=false;say('Ameaça neutralizada.',1.3)}else say('Atingiste o alvo.',1)}else say('Disparo efetuado.',.6);updateHUD()}
+function rayBlocked(dist,ang){for(let d=.2;d<dist;d+=.08)if(wall(player.x+Math.cos(player.a+ang)*d,player.y+Math.sin(player.a+ang)*d))return true;return false}
+function reload(){if(ammo<12){ammo=12;updateHUD();say('Carregador completo.',1)}}
+function render(){
+ctx.fillStyle='#202a22';ctx.fillRect(0,0,W,H/2);ctx.fillStyle='#34352b';ctx.fillRect(0,H/2,W,H/2);
+let horizon=H*.49;ctx.fillStyle='#29352b';ctx.fillRect(0,0,W,horizon);ctx.fillStyle='#49483b';ctx.fillRect(0,horizon,W,H-horizon);
+const fov=Math.PI/2.9,cols=Math.max(180,Math.floor(W/3)),cw=W/cols;zbuf.length=cols;
+for(let i=0;i<cols;i++){let ang=player.a+(i/cols-.5)*fov,dist=0,hit=0;for(dist=.03;dist<22;dist+=.035){let x=player.x+Math.cos(ang)*dist,y=player.y+Math.sin(ang)*dist;if(wall(x,y)){hit=1;break}}
+let corrected=dist*Math.cos(ang-player.a);zbuf[i]=corrected;let height=Math.min(H*1.5,H/(corrected+.12));let shade=Math.max(28,170-corrected*13);let stripe=(Math.floor((Math.atan2(Math.sin(ang),Math.cos(ang))*8)+8)%2)*10;ctx.fillStyle=`rgb(${shade*.72|0},${shade*.83|0},${shade*.68|0})`;ctx.fillRect(i*cw,(H-height)/2,cw+1,height);ctx.fillStyle=`rgba(0,0,0,${Math.min(.5,corrected/25)})`;ctx.fillRect(i*cw,(H-height)/2,cw+1,height);if(hit&&Math.floor(i/10)%2===0){ctx.fillStyle='#ffffff0b';ctx.fillRect(i*cw,(H-height)/2,cw+1,2)}}
+function sprite(x,y,color,label,size=1){let dx=x-player.x,dy=y-player.y,d=Math.hypot(dx,dy),a=Math.atan2(dy,dx)-player.a;while(a>Math.PI)a-=Math.PI*2;while(a< -Math.PI)a+=Math.PI*2;if(Math.abs(a)>fov*.65||d<.1)return;let sx=(.5+a/fov)*W,idx=Math.max(0,Math.min(cols-1,Math.floor(sx/cw)));if(d>zbuf[idx]+.15)return;let h=Math.min(H*.7,H/(d+.15)*.65*size),w=h*.48;ctx.fillStyle=color;ctx.fillRect(sx-w/2,H*.51-h,w,h);ctx.fillStyle='#171713';ctx.fillRect(sx-w*.34,H*.51-h*.82,w*.68,h*.17);ctx.fillStyle='#d6c9a4';ctx.fillRect(sx-w*.22,H*.51-h*.96,w*.44,h*.16);ctx.font=`bold ${Math.max(10,h*.13)}px sans-serif`;ctx.textAlign='center';ctx.fillStyle='#fff';ctx.fillText(label,sx,H*.51-h-6)}
+for(const e of enemies)if(e.alive)sprite(e.x,e.y,'#596b4a','HOSTIL');
+if(!hasRadio)sprite(radio.x,radio.y,'#d2b35e','RÁDIO',.65);
+sprite(exit.x,exit.y,'#4d9b83','SAÍDA',.8);
+if(shotFlash>0){ctx.fillStyle='#fff8';ctx.fillRect(0,0,W,H);shotFlash=0}
+}
+function update(dt){let speed=2.25*dt;let forward=keys.w-keys.s+stickY,strafe=keys.d-keys.a+stickX;let turn=keys.right-keys.left;player.a+=turn*dt*2.2;move((Math.cos(player.a)*forward+Math.cos(player.a+Math.PI/2)*strafe)*speed,(Math.sin(player.a)*forward+Math.sin(player.a+Math.PI/2)*strafe)*speed);
+for(const e of enemies){if(!e.alive)continue;let d=Math.hypot(e.x-player.x,e.y-player.y);if(d<5){let a=Math.atan2(player.y-e.y,player.x-e.x);let nx=e.x+Math.cos(a)*dt*.34,ny=e.y+Math.sin(a)*dt*.34;if(!wall(nx,e.y))e.x=nx;if(!wall(e.x,ny))e.y=ny;if(d<1.05){life=Math.max(0,life-dt*11);updateHUD();if(life<=0)finish(false)}}}
+if(!hasRadio&&Math.hypot(player.x-radio.x,player.y-radio.y)<.8){hasRadio=true;updateHUD();say('Rádio recuperado! Agora vai para a saída.',3)}
+if(hasRadio&&Math.hypot(player.x-exit.x,player.y-exit.y)<.85)finish(true);
+if(noticeTime>0){noticeTime-=dt;document.getElementById('message').textContent=notice}else document.getElementById('message').textContent='';
+}
+function finish(success){if(!running)return;running=false;document.getElementById('endTitle').textContent=success?'MISSÃO CONCLUÍDA':'MISSÃO FALHADA';document.getElementById('endText').textContent=success?'Recuperaste o rádio e saíste do posto. Esta foi a primeira missão do protótipo.':'Ficaste sem energia. Tenta novamente e usa os obstáculos para te proteger.';document.getElementById('end').style.display='flex'}
+function loop(ts){if(!running)return;let dt=Math.min(.04,(ts-last)/1000||0);last=ts;update(dt);render();requestAnimationFrame(loop)}
+const keys={w:0,a:0,s:0,d:0,left:0,right:0};
+addEventListener('keydown',e=>{let k=e.key.toLowerCase();if(k in keys)keys[k]=1;if(k===' '){e.preventDefault();shoot()}if(k==='r')reload()});
+addEventListener('keyup',e=>{let k=e.key.toLowerCase();if(k in keys)keys[k]=0});
+let stickX=0,stickY=0,stick=document.getElementById('stick'),nub=document.getElementById('nub'),sid=null;
+function stickMove(e){let r=stick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,dx=e.clientX-cx,dy=e.clientY-cy,len=Math.hypot(dx,dy),max=36;if(len>max){dx=dx/len*max;dy=dy/len*max}nub.style.transform=`translate(${dx}px,${dy}px)`;stickX=dx/max;stickY=-dy/max}
+stick.addEventListener('pointerdown',e=>{sid=e.pointerId;stick.setPointerCapture(sid);stickMove(e)});stick.addEventListener('pointermove',e=>{if(e.pointerId===sid)stickMove(e)});function stopStick(){sid=null;stickX=stickY=0;nub.style.transform=''}stick.addEventListener('pointerup',stopStick);stick.addEventListener('pointercancel',stopStick);
+let lookId=null,lastLook=0;canvas.addEventListener('pointerdown',e=>{if(e.clientX<innerWidth*.42)return;lookId=e.pointerId;lastLook=e.clientX;canvas.setPointerCapture(lookId)});canvas.addEventListener('pointermove',e=>{if(e.pointerId===lookId){player.a+=(e.clientX-lastLook)*.006;lastLook=e.clientX}});canvas.addEventListener('pointerup',e=>{if(e.pointerId===lookId)lookId=null});
+document.getElementById('fire').addEventListener('pointerdown',e=>{e.preventDefault();shoot()});document.getElementById('reload').addEventListener('click',reload);
+document.getElementById('play').onclick=()=>{document.getElementById('start').style.display='none';document.getElementById('end').style.display='none';reset();running=true;last=performance.now();requestAnimationFrame(loop)};
+document.getElementById('again').onclick=()=>{document.getElementById('end').style.display='none';reset();running=true;last=performance.now();requestAnimationFrame(loop)};
+if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
+reset();
+})();
+</script>
+</body></html>
